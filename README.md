@@ -1,6 +1,8 @@
 # ytmusic_bulk_download
 ## In development, Rewritten based on my old script
-
+`ytmusic_core_download.py` process the download and handle some basic tag write
+`ytmusic_core_normalizer.py` extract data to build a clean file for normlizer script
+`ytmusic_core_normalizer` normalizer artist name
 # detail
 1. using youtube music api to get data and pass into yt-dlp + ffmpeg to download an albums
 2. support range list of url or id.
