@@ -1,5 +1,7 @@
 import json
 
+#TODO: alot data have same field make it more clean.
+
 def format_get_song(data):
     renderer = data['musicResponsiveListItemRenderer']
     
@@ -387,6 +389,7 @@ def format_get_artist_topsongs(data):
         'params': data['musicShelfRenderer']['title']['runs'][0]['navigationEndpoint']['browseEndpoint']['params'],
     }
     return result
+
 def format_get_artist_albums(data):
     albums = []
     for item in data['musicCarouselShelfRenderer']['contents']:

@@ -5,7 +5,7 @@ import urllib.parse
 import json
 import time
 
-class api:
+class Api:
     def __init__(self):
         self.lib = YTMusic()
         self.session = requests.Session()
@@ -39,10 +39,7 @@ class api:
 
     def get_session(self):
         return self.session
-    
-    def get_artist(self, channelId: str):
-        data = self.get_artist_page(channelId)
-        return data
+
     def get_artist_page(self, channelId: str):
         """Fetch artist data from YouTube Music"""
         payload = {
@@ -163,7 +160,7 @@ class api:
         return data
 
     def get_albums_page(self, browseId: str, params: str):
-        num = 0;
+        num = 0
         data=[]
         while(True):
             if num ==0:
@@ -176,9 +173,9 @@ class api:
             print(data[num])
             #with open(f'data_albums_page_{num}.json', 'w', encoding='utf-8') as f:
             #    json.dump(data, f, indent=3, ensure_ascii=False)
-            num += 1;
+            num += 1
             time.sleep(0.5)
-        return data;
+        return data
 
     def querry_albums_page(self, browseId: str, params: str, continuation=None):
         if continuation:
