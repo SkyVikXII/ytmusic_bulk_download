@@ -1,5 +1,6 @@
 import time
 import os
+import json
 
 from api import Api
 from pathlib import Path
@@ -15,7 +16,7 @@ class Core:
         self.config = {
             'appdir': appdir,
             'appdata': appdata,
-            'artist_dir': appdata / "artist",
+            'artist_dir': appdata / "channel",
             'album_dir': appdata / "album"
         }
         self.artist_cache: dict = {}
@@ -79,74 +80,81 @@ class Core:
         time.sleep(1)
         return None
 
-def get_artist_data(channelId: str, max_age_days: int = 3):
-    """Get artist data with cache age checking"""
-    
-    if channelId in artist_cache:
-        print(artist_cache[channelId]['name'])
-        return artist_cache[channelId]
-    
-    os.makedirs(config['artist_dir'], exist_ok=True)
-    path = os.path.join(config['artist_dir'], f"{channelId}","artist.json")
-    
-    # Check if cache file exists and is not too old
-    cache_valid = False
-    cache_data = None
-    
-    if os.path.isfile(path):
-        # Get file modification time
-        file_mtime = os.path.getmtime(path)
-        file_age_days = (time.time() - file_mtime) / (24 * 3600)
+    def get_artist_data(self, channelId: str, max_age_days: int = 3):
+        """Get artist data with cache age checking"""
         
-        if file_age_days <= max_age_days:
-            # Cache is fresh enough
-            with open(path, encoding="utf-8") as f:
-                cache_data = json.load(f)
-            cache_valid = True
-            print(f'[debug] Using cached artist data for {channelId} (age: {file_age_days:.1f} days)')
-            print(f'[debug] def get_artist_data: {cache_data["name"]}')
-        else:
-            print(f'[debug] Cache expired for {channelId} (age: {file_age_days:.1f} days > {max_age_days} days)')
-            print(f'[debug] Will fetch fresh data from API')
-    
-    if cache_valid and cache_data:
-        _artist_cache[channelId] = cache_data
-        return cache_data
-    
-    # Fetch fresh data from API
-    try:
-        print(f"  [API ] Fetching YTMusic artist: {channelId}")
-        data = self.api.lib.get_artist(channelId=channelId)
+        if channelId in self.artist_cache:
+            print(self.artist_cache[channelId]['name'])
+            return self.artist_cache[channelId]
+        artist_dir = os.path.join(self.config['artist_dir'], f"{channelId}")
+        os.makedirs(artist_dir, exist_ok=True)
+        path = os.path.join(artist_dir,"artist.json")
         
-        # Save with timestamp metadata
-        data['_cache_timestamp'] = datetime.now().isoformat()
-        data['_cache_age_days'] = 0
+        # Check if cache file exists and is not too old
+        cache_valid = False
+        cache_data = None
         
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=3, ensure_ascii=False)
+        if os.path.isfile(path):
+            # Get file modification time
+            file_mtime = os.path.getmtime(path)
+            file_age_days = (time.time() - file_mtime) / (24 * 3600)
+            
+            if file_age_days <= max_age_days:
+                # Cache is fresh enough
+                with open(path, encoding="utf-8") as f:
+                    cache_data = json.load(f)
+                cache_valid = True
+                print(f'[debug] Using cached artist data for {channelId} (age: {file_age_days:.1f} days)')
+                print(f'[debug] def get_artist_data: {cache_data["name"]}')
+            else:
+                print(f'[debug] Cache expired for {channelId} (age: {file_age_days:.1f} days > {max_age_days} days)')
+                print(f'[debug] Will fetch fresh data from API')
         
-        print(f'[debug] Fresh data fetched and saved for {channelId}: {data["name"]}')
-        _artist_cache[channelId] = data
-        return data
+        if cache_valid and cache_data:
+            result = {
+                'name': cache_data['name'],
+                'channelId': cache_data['channelId']
+            }
+            self.artist_cache[channelId] = result
+            return result
         
-    except Exception as e:
-        print(f"  [ERR ] YTMusic fetch failed for {channelId}: {e}")
-        
-        # If API fails but we have expired cache, use it as fallback
-        if cache_data:
-            print(f"  [WARN] Using expired cache as fallback for {channelId}")
-            _artist_cache[channelId] = cache_data
-            return cache_data
-        
-        return None
+        # Fetch fresh data from API
+        try:
+            print(f"  [API ] Fetching YTMusic artist: {channelId}")
+            data = self.get_artist(channelId=channelId)
+            #print(path)
+            '''
+            if(channelId!=data['channelId']):
+                data = self.get_artist(channelId=channelId)
+            '''
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=3, ensure_ascii=False)
+            
+            #print(f'[debug] Fresh data fetched and saved for {channelId}: {data["name"]}')
+            result = {
+                'name': data['name'],
+                'channelId': data['channelId']
+            }
+            self.artist_cache[channelId] = result
+            return data
+            
+        except Exception as e:
+            print(f"[ERR ] YTMusic fetch failed for {channelId}: {e}")
+            # If API fails but we have expired cache, use it as fallback
+            if cache_data:
+                print(f"[WARN] Using expired cache as fallback for {channelId}")
+                self.artist_cache[channelId] = cache_data
+                return cache_data
+            
+            return None
 
 def get_artist_name(channelId: str):
-    print(f"  [DEBUG] Getting artist name for channelId: {channelId}")
+    #print(f"  [DEBUG] Getting artist name for channelId: {channelId}")
     data = get_artist_data(channelId)
     if data:
-        print(f"  [DEBUG] Found name: '{data['name']}'")
+        #print(f"  [DEBUG] Found name: '{data['name']}'")
         return data['name'].rstrip()
-    print(f"  [DEBUG] No data found for {channelId}")
+    #print(f"  [DEBUG] No data found for {channelId}")
     return "Unknown Artist"
 
 def build_artist_folder_name(album_data):
