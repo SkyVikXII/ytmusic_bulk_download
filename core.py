@@ -1,6 +1,11 @@
+import time
+import os
+
 from api import Api
 from pathlib import Path
 from format import format_get_artist_data, format_get_artist_albums_data
+from utils import safe_filename, convert_end_dot, safe_artist_name, get_max_thumbnails, extract_playlist_info, download_image
+from download_logic import download_playlist
 
 class Core:
     def __init__(self):
@@ -13,22 +18,76 @@ class Core:
             'artist_dir': appdata / "artist",
             'album_dir': appdata / "album"
         }
-        self._artist_cache: dict = {}
+        self.artist_cache: dict = {}
+
     def get_artist(self, channelId:str):
         return format_get_artist_data(self.api.get_artist_page(channelId))
-        
+
     def get_albums(self, browseId: str, params: str):
         return format_get_artist_albums_data(self.api.get_albums_page(browseId,params))
+
+    def download_album(self, input_dir, browseId:str):
+        try:
+            # Get album data first
+            album_data = self.api.lib.get_album(browseId)
+                        
+            if 'audioPlaylistId' in album_data:
+                audio_playlist_id = album_data['audioPlaylistId']
+                playlist_url = f"https://music.youtube.com/playlist?list={audio_playlist_id}"
+                            
+                # Step 1: Extract playlist info first
+                print(f"Extracting playlist info: {playlist_url}")
+                playlist_info = extract_playlist_info(playlist_url)
+                            
+            if playlist_info and 'entries' in playlist_info:
+                # Build the folder structure
+                # Get artist names from album_data
+                artist_names = build_artist_folder_name(album_data)
+                artist_folder_name = ", ".join(artist_names) if artist_names else "Unknown Artist"
+                # Get album title from playlist info (or fallback to album_data)
+                album_title = album_data.get('title', 'Unknown Album')
+                album_type = album_data.get('type','playlist')
+                safe_album_title = safe_filename(album_title)
+                                
+                # Build full path: {input_dir}/{artists}/{album title} - [{browseId}]
+                album_dir = os.path.join(input_dir, convert_end_dot(safe_filename(artist_folder_name)).rstrip(), f"{album_type} - {safe_album_title} - [{browseId}]")
+                os.makedirs(album_dir, exist_ok=True)
+            
+                print(f"Download path: {album_dir}")
+                    # Download album cover
+                if album_data.get('thumbnails') and len(album_data['thumbnails']) > 0:
+                    cover_url = get_max_thumbnails(album_data['thumbnails'][0]['url'])
+                    download_image(album_dir, "cover", cover_url)
+                    # Step 2: Download the playlist content
+                    success = download_playlist(playlist_info, album_dir, album_data, 'ffmpeg.exe', None)
+                    #for item in playlist_info[entries]:
+                                
+                                
+                    if success:
+                        print('success')
+                    else:
+                        print('fail')
+                else:
+                    print(f"No tracks found in playlist")
+            else:
+                print(f"No audioPlaylistId found")
+                        
+        except Exception as e:
+            print(f"Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+        time.sleep(1)
+        return None
 
 def get_artist_data(channelId: str, max_age_days: int = 3):
     """Get artist data with cache age checking"""
     
-    if channelId in _artist_cache:
-        print(_artist_cache[channelId]['name'])
-        return _artist_cache[channelId]
+    if channelId in artist_cache:
+        print(artist_cache[channelId]['name'])
+        return artist_cache[channelId]
     
-    os.makedirs(raw_dir, exist_ok=True)
-    path = os.path.join(raw_dir, f"{channelId}_artist_data.json")
+    os.makedirs(config['artist_dir'], exist_ok=True)
+    path = os.path.join(config['artist_dir'], f"{channelId}","artist.json")
     
     # Check if cache file exists and is not too old
     cache_valid = False
@@ -57,8 +116,7 @@ def get_artist_data(channelId: str, max_age_days: int = 3):
     # Fetch fresh data from API
     try:
         print(f"  [API ] Fetching YTMusic artist: {channelId}")
-        ytmusic = YTMusic()
-        data = ytmusic.get_artist(channelId=channelId)
+        data = self.api.lib.get_artist(channelId=channelId)
         
         # Save with timestamp metadata
         data['_cache_timestamp'] = datetime.now().isoformat()
